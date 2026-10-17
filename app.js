@@ -268,6 +268,11 @@ function startConj() {
   runSession("Verben im Präsens", list);
 }
 
+function startSpeak() {
+  const sents = pick(ITEMS.filter(i => i.kind === "s"), 8);
+  runSession("Aussprache", sents.map(item => ({ type: "speak", item, noSRS: true })));
+}
+
 // ---------- Startseite ----------
 function home() {
   const due = dueItems().length;
@@ -288,6 +293,8 @@ function home() {
       }),
       h("h2", {}, "Training"),
       h("button", { class: "card", onclick: startConj }, h("span", { class: "ic" }, "🔤"), h("span", { class: "tx" }, h("b", {}, "Verben konjugieren"), h("span", { class: "sub2" }, "ser, estar, tener, ir … im Präsens"))),
+      h("button", { class: "card", onclick: SR ? startSpeak : () => alert("Spracherkennung wird in diesem Browser nicht unterstützt. Bitte Chrome verwenden.") },
+        h("span", { class: "ic" }, "🎤"), h("span", { class: "tx" }, h("b", {}, "Aussprache üben"), h("span", { class: "sub2" }, SR ? "Sätze laut nachsprechen" : "Nur in Chrome verfügbar"))),
       h("div", { class: "statbox" },
         h("div", {}, h("b", {}, String(today)), "Lektionen heute"), h("div", {}, h("b", {}, `${seen}/${total}`), "Karten gelernt"), h("div", {}, h("b", {}, String(mastered)), "gefestigt")),
       h("button", { class: "ghost small", onclick: () => { if (confirm("Gesamten Fortschritt löschen?")) { S = DEFAULTS(); save(); home(); } } }, "Fortschritt zurücksetzen")));

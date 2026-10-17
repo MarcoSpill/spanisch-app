@@ -40,7 +40,7 @@ TOPICS.forEach(t => {
 
 // ---------- Speicher & Wiederholungsplan ----------
 const KEY = "spanisch-app-v1";
-const DEFAULTS = () => ({ cards: {}, xp: 0, streak: 0, last: null, days: {} });
+const DEFAULTS = () => ({ cards: {}, xp: 0, streak: 0, last: null, days: {}, dlg: {} });
 let S;
 try { S = Object.assign(DEFAULTS(), JSON.parse(localStorage.getItem(KEY) || "{}")); } catch { S = DEFAULTS(); }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { } };
@@ -193,7 +193,7 @@ const RENDER = {
     };
     go.onclick = submit;
     input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
-    body.append(h("div", { class: "tag" }, `Präsens: ${inf} (${de})`), h("div", { class: "big" }, PERSONS[ex.p]), input, go);
+    body.append(h("div", { class: "tag" }, `${ex.tense}: ${inf} (${de})`), h("div", { class: "big" }, PERSONS[ex.p]), input, go);
     setTimeout(() => input.focus(), 100);
   }
 };
@@ -233,17 +233,73 @@ function runSession(title, list) {
     RENDER[ex.type](ex, body, answer);
   }
 
-  function finish() {
-    const t = dayStr(Date.now());
-    if (S.last !== t) { S.streak = S.last === dayStr(Date.now() - 864e5) ? S.streak + 1 : 1; S.last = t; }
-    S.days[t] = (S.days[t] || 0) + 1;
-    save();
-    app.replaceChildren(h("main", { class: "done" },
-      h("div", { class: "trophy" }, "🎉"), h("h1", {}, "¡Muy bien!"), h("p", {}, title),
-      h("div", { class: "stats" }, h("div", {}, h("b", {}, "+" + gained), "XP"), h("div", {}, h("b", {}, String(good)), "richtig"), h("div", {}, h("b", {}, "🔥 " + currentStreak()), "Tage in Folge")),
-      h("button", { class: "primary", onclick: home }, "Fertig")));
-  }
+  const finish = () => doneScreen(title, good, gained);
   next();
+}
+
+function doneScreen(title, good, gained) {
+  const t = dayStr(Date.now());
+  if (S.last !== t) { S.streak = S.last === dayStr(Date.now() - 864e5) ? S.streak + 1 : 1; S.last = t; }
+  S.days[t] = (S.days[t] || 0) + 1;
+  save();
+  app.replaceChildren(h("main", { class: "done" },
+    h("div", { class: "trophy" }, "🎉"), h("h1", {}, "¡Muy bien!"), h("p", {}, title),
+    h("div", { class: "stats" }, h("div", {}, h("b", {}, "+" + gained), "XP"), h("div", {}, h("b", {}, String(good)), "richtig"), h("div", {}, h("b", {}, "🔥 " + currentStreak()), "Tage in Folge")),
+    h("button", { class: "primary", onclick: home }, "Fertig")));
+}
+
+// ---------- Dialoge ----------
+function runDialog(d) {
+  let i = 0, good = 0, gained = 0;
+  const chat = h("div", { class: "chat" }), optsBox = h("div", { class: "opts" }), fb = h("div", { class: "fb hidden" }), fill = h("i");
+  const bubble = (who, es, de) => {
+    const b = h("div", { class: "bub " + who, onclick: () => say(es) }, h("div", {}, es), h("div", { class: "bde" }, de));
+    chat.append(b);
+    b.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+  function step() {
+    fill.style.width = Math.round(i / d.steps.length * 100) + "%";
+    if (i >= d.steps.length) { S.dlg[d.id] = (S.dlg[d.id] || 0) + 1; return doneScreen(d.title, good, gained); }
+    const s = d.steps[i];
+    bubble("npc", s.npc, s.npcDe);
+    say(s.npc);
+    fb.className = "fb hidden";
+    const opts = [{ es: s.right[0], ok: true }, ...s.wrong.map(es => ({ es, ok: false }))];
+    const btns = shuffle(opts).map(o => {
+      const b = h("button", { class: "opt" }, o.es);
+      b.onclick = () => choose(s, o, b, btns);
+      return b;
+    });
+    optsBox.replaceChildren(...btns);
+  }
+  function choose(s, o, btn, btns) {
+    btns.forEach(x => { x.disabled = true; if (x.textContent === s.right[0]) x.classList.add("right"); });
+    if (o.ok) { good++; gained += 10; S.xp += 10; } else btn.classList.add("wrong");
+    save();
+    optsBox.replaceChildren();
+    bubble("me", s.right[0], s.right[1]);
+    say(s.right[0]);
+    const heard = h("div", { class: "fbinfo" });
+    const mic = SR ? h("button", { class: "ghost", onclick: () => {
+      mic.disabled = true; heard.textContent = "Ich höre zu …";
+      const r = new SR(); r.lang = "es-ES"; r.maxAlternatives = 3;
+      let got = false;
+      r.onresult = e => { got = true; const alts = [...e.results[0]].map(a => a.transcript); const best = Math.max(...alts.map(a => similarity(a, s.right[0]))); heard.textContent = (best >= 0.75 ? "✓ " : "✗ ") + `verstanden: „${alts[0]}“`; mic.disabled = false; };
+      r.onerror = r.onend = () => { if (!got) { got = true; heard.textContent = "Nichts verstanden."; mic.disabled = false; } };
+      try { r.start(); } catch { mic.disabled = false; }
+    } }, "🎤 Nachsprechen") : null;
+    fb.className = "fb " + (o.ok ? "ok" : "bad");
+    fb.replaceChildren(...[
+      h("div", { class: "fbtitle" }, o.ok ? "¡Correcto! +10" : "Besser wäre gewesen:"),
+      mic, heard,
+      h("button", { class: "primary", id: "nextBtn", onclick: () => { i++; step(); } }, "Weiter")].filter(Boolean));
+    document.getElementById("nextBtn").focus();
+    fb.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  app.replaceChildren(
+    h("header", { class: "top" }, h("button", { class: "x", "aria-label": "Beenden", onclick: home }, "✕"), h("div", { class: "bar" }, fill)),
+    h("main", { class: "dlg" }, h("div", { class: "tag center" }, d.title), chat, optsBox), fb);
+  step();
 }
 
 function exerciseFor(item) {
@@ -262,10 +318,20 @@ function startReview() {
   if (!due.length) return;
   runSession("Wiederholung", shuffle(due.map(exerciseFor)).map(e => e.type === "speak" ? { ...e, noSRS: true } : e));
 }
-function startConj() {
+function startConj(tenseId) {
   const list = [];
-  for (let k = 0; k < 10; k++) list.push({ type: "conj", verb: rnd(VERBS), p: Math.floor(Math.random() * 6), noSRS: true });
-  runSession("Verben im Präsens", list);
+  for (let k = 0; k < 10; k++) {
+    const t = tenseId === "mix" ? rnd(TENSES) : TENSES.find(x => x.id === tenseId);
+    list.push({ type: "conj", tense: t.name, verb: rnd(t.verbs), p: Math.floor(Math.random() * 6), noSRS: true });
+  }
+  runSession(tenseId === "mix" ? "Verben gemischt" : "Verben: " + TENSES.find(x => x.id === tenseId).name, list);
+}
+function conjMenu() {
+  app.replaceChildren(
+    h("header", { class: "top" }, h("button", { class: "x", "aria-label": "Zurück", onclick: home }, "←"), h("b", {}, "Zeitform wählen")),
+    h("main", { class: "home" },
+      TENSES.map(t => h("button", { class: "card", onclick: () => startConj(t.id) }, h("span", { class: "ic" }, "🔤"), h("span", { class: "tx" }, h("b", {}, t.name), h("span", { class: "sub2" }, t.sub)))),
+      h("button", { class: "card", onclick: () => startConj("mix") }, h("span", { class: "ic" }, "🎲"), h("span", { class: "tx" }, h("b", {}, "Alle gemischt"), h("span", { class: "sub2" }, "Gegenwart, Vergangenheit, Zukunft")))));
 }
 
 function startSpeak() {
@@ -291,8 +357,11 @@ function home() {
         return h("button", { class: "card", onclick: () => startTopic(t) },
           h("span", { class: "ic" }, t.icon), h("span", { class: "tx" }, h("b", {}, t.title), h("span", { class: "mini" }, h("span", { class: "bar" }, fill), `${s}/${its.length}`)));
       }),
+      h("h2", {}, "Dialoge"),
+      DIALOGS.map(d => h("button", { class: "card", onclick: () => runDialog(d) },
+        h("span", { class: "ic" }, d.icon), h("span", { class: "tx" }, h("b", {}, d.title), h("span", { class: "sub2" }, `${d.steps.length} Antworten` + (S.dlg[d.id] ? ` · ${S.dlg[d.id]}× geschafft` : ""))))),
       h("h2", {}, "Training"),
-      h("button", { class: "card", onclick: startConj }, h("span", { class: "ic" }, "🔤"), h("span", { class: "tx" }, h("b", {}, "Verben konjugieren"), h("span", { class: "sub2" }, "ser, estar, tener, ir … im Präsens"))),
+      h("button", { class: "card", onclick: conjMenu }, h("span", { class: "ic" }, "🔤"), h("span", { class: "tx" }, h("b", {}, "Verben konjugieren"), h("span", { class: "sub2" }, "Präsens, Perfekt, Indefinido, Futuro"))),
       h("button", { class: "card", onclick: SR ? startSpeak : () => alert("Spracherkennung wird in diesem Browser nicht unterstützt. Bitte Chrome verwenden.") },
         h("span", { class: "ic" }, "🎤"), h("span", { class: "tx" }, h("b", {}, "Aussprache üben"), h("span", { class: "sub2" }, SR ? "Sätze laut nachsprechen" : "Nur in Chrome verfügbar"))),
       h("div", { class: "statbox" },

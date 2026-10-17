@@ -57,5 +57,12 @@ h1 { margin: 0; font-size: 28px; } h2 { font-size: 15px; text-transform: upperca
 .fbtitle { font-weight: 700; } .fb.ok .fbtitle { color: var(--ok); } .fb.bad .fbtitle { color: var(--bad); } .fbinfo { font-size: 18px; }
 .fb.ok .primary { background: var(--ok); } .fb.bad .primary { background: var(--bad); }
 
+.dlg { flex: 1; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.tag.center { text-align: center; }
+.chat { display: flex; flex-direction: column; gap: 10px; }
+.bub { max-width: 88%; padding: 10px 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); align-self: flex-start; font-weight: 600; }
+.bub.me { align-self: flex-end; background: var(--ok-bg); border-color: var(--ok); }
+.bde { font-size: 13px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+.fb { position: sticky; bottom: 0; }
 .done { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 24px; text-align: center; }
 .trophy { font-size: 72px; } .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; margin: 12px 0; }

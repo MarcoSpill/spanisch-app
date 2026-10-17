@@ -102,8 +102,8 @@ function options(body, correct, wrongs, onPick) {
 const RENDER = {
   intro(ex, body, answer) {
     const i = ex.item;
-    body.append(h("div", { class: "tag" }, "Neues Wort"), h("div", { class: "big" }, i.es), h("div", { class: "sub" }, i.de), sndBtn(i.es),
-      h("button", { class: "primary", onclick: () => answer(null) }, "Weiter"));
+    body.append(h("div", { class: "tag" }, "Neues Wort"), h("div", { class: "big" }, i.es), h("div", { class: "sub" }, i.de), sndBtn(i.es));
+    answer(null);
     say(i.es);
   },
   mc(ex, body, answer) {
@@ -221,10 +221,10 @@ function runSession(title, list) {
       save();
       if (ex.item && ok !== null && ex.type !== "speak" && ex.type !== "listen") say(ex.item.es);
       fb.className = "fb " + (ok === true ? "ok" : ok === false ? "bad" : "neutral");
-      fb.replaceChildren(
+      fb.replaceChildren(...[
         ok === null ? null : h("div", { class: "fbtitle" }, ok ? "¡Correcto! +10" : "Richtig wäre:"),
         ok === false ? h("div", { class: "fbinfo" }, info) : ok && info && info !== (ex.item && ex.item.es) ? h("div", { class: "fbinfo" }, info) : null,
-        h("button", { class: "primary", id: "nextBtn", onclick: next }, "Weiter"));
+        h("button", { class: "primary", id: "nextBtn", onclick: next }, "Weiter")].filter(Boolean));
       document.getElementById("nextBtn").focus();
     }
     app.replaceChildren(

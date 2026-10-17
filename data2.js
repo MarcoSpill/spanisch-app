@@ -108,6 +108,58 @@ TOPICS.push(
   }
 );
 
+// ---------- Niveau B2 ----------
+TOPICS.push(
+  {
+    id: "argumentar", icon: "🗣️", title: "Diskutieren & Argumentieren", lvl: "B2",
+    w: [
+      ["sin embargo", "jedoch, trotzdem"], ["por lo tanto", "deshalb, folglich"], ["a pesar de", "trotz"],
+      ["en cambio", "dagegen, hingegen"], ["por un lado… por otro", "einerseits … andererseits"], ["en cuanto a", "was … betrifft"],
+      ["tener en cuenta", "berücksichtigen"], ["estar a favor de", "dafür sein"], ["estar en contra de", "dagegen sein"],
+      ["la ventaja", "der Vorteil"], ["la desventaja", "der Nachteil"], ["el argumento", "das Argument"],
+      ["sostener", "behaupten"], ["darse cuenta de", "bemerken, merken"], ["aunque", "obwohl, auch wenn"],
+      ["mientras que", "während, wohingegen"], ["cabe destacar", "hervorzuheben ist"], ["en definitiva", "letztendlich"]
+    ],
+    s: [
+      ["Es una buena idea; sin [embargo], es muy cara.", "Es ist eine gute Idee, aber sie ist sehr teuer."],
+      ["A [pesar] de la lluvia, salimos a pasear.", "Trotz des Regens gingen wir spazieren."],
+      ["Por un lado me gusta, por [otro] me da miedo.", "Einerseits gefällt es mir, andererseits macht es mir Angst."],
+      ["En [cuanto] a tu propuesta, tengo algunas dudas.", "Was deinen Vorschlag betrifft, habe ich einige Zweifel."],
+      ["Hay que tener en [cuenta] el presupuesto.", "Man muss das Budget berücksichtigen."],
+      ["Estoy en [contra] de esa decisión.", "Ich bin gegen diese Entscheidung."],
+      ["Aunque [llueva], iremos a la playa.", "Auch wenn es regnet, gehen wir an den Strand."],
+      ["Me di [cuenta] de que tenías razón.", "Mir ist klar geworden, dass du recht hattest."]
+    ]
+  },
+  {
+    id: "modismos", icon: "🇪🇸", title: "Redewendungen & Umgangssprache", lvl: "B2",
+    w: [
+      ["estar en las nubes", "mit den Gedanken woanders sein"], ["costar un ojo de la cara", "ein Vermögen kosten"], ["meter la pata", "ins Fettnäpfchen treten"],
+      ["ser pan comido", "ein Kinderspiel sein"], ["no tener ni idea", "keine Ahnung haben"], ["estar hecho polvo", "total erledigt sein"],
+      ["tomar el pelo", "auf den Arm nehmen"], ["¡Qué rollo!", "Wie nervig / langweilig!"], ["¡Vaya!", "Na so was! / Oh!"],
+      ["¡Anda!", "Na so was! / Los!"], ["¡Venga!", "Los! / Komm schon!"], ["pasarlo bomba", "riesig Spaß haben"],
+      ["estar harto de", "die Nase voll haben von"], ["echar una mano", "mit anpacken, helfen"], ["ponerse las pilas", "sich ins Zeug legen"],
+      ["ser majo", "nett sein"], ["un montón", "jede Menge"], ["flipar", "ausflippen, beeindruckt sein"]
+    ],
+    s: [
+      ["Este bolso me ha costado un ojo de la [cara].", "Diese Tasche hat mich ein Vermögen gekostet."],
+      ["He [metido] la pata con tu hermana, sin querer.", "Ich bin bei deiner Schwester aus Versehen ins Fettnäpfchen getreten."],
+      ["El examen fue [pan] comido.", "Die Prüfung war ein Kinderspiel."],
+      ["Estoy hecho [polvo] después de tanto trabajo.", "Ich bin nach so viel Arbeit total erledigt."],
+      ["¿Me puedes echar una [mano] con las maletas?", "Kannst du mir mit den Koffern helfen?"],
+      ["No me [tomes] el pelo, ¿es verdad?", "Veräppel mich nicht, stimmt das wirklich?"],
+      ["Estoy [harto] de esperar el autobús.", "Ich habe die Nase voll vom Warten auf den Bus."],
+      ["Anoche lo pasamos [bomba] en la fiesta.", "Gestern Abend hatten wir auf der Feier riesigen Spaß."]
+    ]
+  }
+);
+
+// Niveaus der bisherigen Themen
+Object.entries({
+  familia: "A2", comida: "A2", cotidiano: "A2", viajes: "A2", charla: "A2",
+  salud: "B1", hogar: "B1", trabajo: "B1", fiesta: "B1", emociones: "B1"
+}).forEach(([id, l]) => { TOPICS.find(t => t.id === id).lvl = l; });
+
 // ---------- Zeitformen ----------
 const PARTICIPLES = { ser: "sido", estar: "estado", tener: "tenido", ir: "ido", hacer: "hecho", poder: "podido", querer: "querido", decir: "dicho", venir: "venido", hablar: "hablado", comer: "comido", vivir: "vivido" };
 const FUT_STEM = { tener: "tendr", poder: "podr", querer: "querr", hacer: "har", decir: "dir", venir: "vendr" };

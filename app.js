@@ -8,7 +8,7 @@ function h(tag, attrs = {}, ...kids) {
     else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
     else e.setAttribute(k, v);
   }
-  kids.flat().forEach(c => { if (c != null && c !== false) e.append(c instanceof Node ? c : document.createTextNode(c)); });
+  kids.flat(Infinity).forEach(c => { if (c != null && c !== false) e.append(c instanceof Node ? c : document.createTextNode(c)); });
   return e;
 }
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -31,16 +31,16 @@ const dayStr = ms => new Date(ms).toLocaleDateString("sv-SE");
 // ---------- Daten ----------
 const ITEMS = [];
 TOPICS.forEach(t => {
-  t.w.forEach((x, i) => ITEMS.push({ id: `${t.id}:w${i}`, topic: t.id, kind: "w", es: x[0], de: x[1] }));
+  t.w.forEach((x, i) => ITEMS.push({ id: `${t.id}:w${i}`, topic: t.id, lvl: t.lvl, kind: "w", es: x[0], de: x[1] }));
   t.s.forEach((x, i) => {
     const gap = x[0].match(/\[(.+?)\]/)[1];
-    ITEMS.push({ id: `${t.id}:s${i}`, topic: t.id, kind: "s", raw: x[0], es: x[0].replace(/[\[\]]/g, ""), de: x[1], gap });
+    ITEMS.push({ id: `${t.id}:s${i}`, topic: t.id, lvl: t.lvl, kind: "s", raw: x[0], es: x[0].replace(/[\[\]]/g, ""), de: x[1], gap });
   });
 });
 
 // ---------- Speicher & Wiederholungsplan ----------
 const KEY = "spanisch-app-v1";
-const DEFAULTS = () => ({ cards: {}, xp: 0, streak: 0, last: null, days: {}, dlg: {} });
+const DEFAULTS = () => ({ cards: {}, xp: 0, streak: 0, last: null, days: {}, dlg: {}, stats: {}, startLevel: null });
 let S;
 try { S = Object.assign(DEFAULTS(), JSON.parse(localStorage.getItem(KEY) || "{}")); } catch { S = DEFAULTS(); }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { } };
@@ -48,11 +48,33 @@ const INTERVALS = [0, 1, 2, 4, 8, 16, 32]; // Tage je Box
 function rate(item, ok) {
   const c = S.cards[item.id] || { box: 0, due: 0 };
   c.box = ok ? Math.min(c.box + 1, 6) : 0;
+  if (!ok) c.miss = (c.miss || 0) + 1;
   c.due = Date.now() + (ok ? INTERVALS[c.box] * 864e5 : 10 * 60e3);
   S.cards[item.id] = c;
 }
 const dueItems = () => ITEMS.filter(i => S.cards[i.id] && S.cards[i.id].due <= Date.now());
 const currentStreak = () => (S.last === dayStr(Date.now()) || S.last === dayStr(Date.now() - 864e5)) ? S.streak : 0;
+// Niveaus: Level ist frei, wenn es unter dem Startniveau liegt oder das vorige zu 80 % gefestigt ist
+const LEVELS = ["A2", "B1", "B2"];
+const UNLOCK_AT = 0.8;
+function levelStats(l) {
+  const its = ITEMS.filter(i => i.lvl === l);
+  const mastered = its.filter(i => (S.cards[i.id]?.box || 0) >= 3).length;
+  return { total: its.length, mastered, pct: its.length ? mastered / its.length : 0 };
+}
+function unlocked(l) {
+  const k = LEVELS.indexOf(l);
+  if (k <= LEVELS.indexOf(S.startLevel || "A2")) return true;
+  return levelStats(LEVELS[k - 1]).pct >= UNLOCK_AT;
+}
+// Statistik nach Übungsart
+const GROUP = { mc: "Wortschatz", mcrev: "Wortschatz", typeit: "Wortschatz", listen: "Hörverstehen", gap: "Sätze", translate: "Sätze", typesent: "Sätze", speak: "Aussprache", conj: "Verben", dlg: "Dialoge" };
+function track(type, ok) {
+  const g = GROUP[type];
+  if (!g) return;
+  const s = S.stats[g] || (S.stats[g] = { n: 0, ok: 0 });
+  s.n++; if (ok) s.ok++;
+}
 function pick(list, n) { return shuffle(list).sort((a, b) => (S.cards[a.id]?.due || 0) - (S.cards[b.id]?.due || 0)).slice(0, n); }
 
 // ---------- Sprache ----------
@@ -179,6 +201,25 @@ const RENDER = {
     body.append(h("div", { class: "tag" }, "Sprich nach"), h("div", { class: "big" }, i.es), h("div", { class: "sub" }, i.de),
       h("div", { class: "row" }, sndBtn(i.es), mic), status, skip);
   },
+  type(ex, body, answer) {
+    const i = ex.item, isWord = i.kind === "w";
+    const clean = s => s.toLowerCase().replace(/[¿?¡!.,;:]/g, "").replace(/\s+/g, " ").trim();
+    const targets = isWord ? [i.es, i.es.replace(/^(el|la|los|las|un|una)\s+/i, "")] : [i.es];
+    const input = h("input", { class: "txt", autocapitalize: "none", autocomplete: "off", spellcheck: "false", placeholder: "Auf Spanisch tippen" });
+    const go = h("button", { class: "primary" }, "Prüfen");
+    const submit = () => {
+      const g = input.value.trim();
+      if (!g) return;
+      input.disabled = true; go.remove();
+      if (targets.some(t => clean(t) === clean(g))) answer(true, i.es);
+      else if (targets.some(t => norm(t) === norm(g))) answer(true, `${i.es}  (Achte auf die Akzente!)`);
+      else answer(false, i.es);
+    };
+    go.onclick = submit;
+    input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+    body.append(h("div", { class: "tag" }, isWord ? "Wie heißt das auf Spanisch?" : "Schreibe den Satz auf Spanisch"), h("div", { class: "big" }, i.de), input, go);
+    setTimeout(() => input.focus(), 100);
+  },
   conj(ex, body, answer) {
     const [inf, de, forms] = ex.verb;
     const input = h("input", { class: "txt", autocapitalize: "none", autocomplete: "off", spellcheck: "false", placeholder: "Antwort" });
@@ -197,6 +238,8 @@ const RENDER = {
     setTimeout(() => input.focus(), 100);
   }
 };
+
+RENDER.typeit = RENDER.typesent = RENDER.type;
 
 // ---------- Ablauf einer Lektion ----------
 function runSession(title, list) {
@@ -218,6 +261,7 @@ function runSession(title, list) {
       if (ex.item && ok !== null && !ex.noSRS && !rated.has(ex.item.id)) { rated.add(ex.item.id); rate(ex.item, ok); }
       if (ok === false && !ex.noSRS && !ex.retry && ex.type !== "intro") queue.push({ ...ex, retry: true });
       if (ok !== null) n++;
+      if (ok !== null && ex.type !== "intro") track(ex.type, ok);
       save();
       if (ex.item && ok !== null && ex.type !== "speak" && ex.type !== "listen") say(ex.item.es);
       fb.className = "fb " + (ok === true ? "ok" : ok === false ? "bad" : "neutral");
@@ -275,6 +319,7 @@ function runDialog(d) {
   function choose(s, o, btn, btns) {
     btns.forEach(x => { x.disabled = true; if (x.textContent === s.right[0]) x.classList.add("right"); });
     if (o.ok) { good++; gained += 10; S.xp += 10; } else btn.classList.add("wrong");
+    track("dlg", o.ok);
     save();
     optsBox.replaceChildren();
     bubble("me", s.right[0], s.right[1]);
@@ -302,9 +347,19 @@ function runDialog(d) {
   step();
 }
 
+// Schwierigkeit richtet sich nach der Box der Karte: neu/wacklig = leicht, sicher = Tippen und Sprechen
 function exerciseFor(item) {
-  if (item.kind === "w") return { type: rnd(["mc", "mcrev", "listen"]), item };
-  return { type: rnd(SR ? ["gap", "translate", "speak"] : ["gap", "translate"]), item, noSRS: false };
+  const box = S.cards[item.id]?.box || 0;
+  let pool;
+  if (item.kind === "w") {
+    const typable = !/[\/(…]/.test(item.es);
+    pool = box <= 1 ? ["mc", "mc", "listen"] : box <= 3 ? ["mcrev", "mcrev", "listen"] : typable ? ["typeit", "typeit", "mcrev"] : ["mcrev"];
+  } else {
+    pool = box <= 1 ? ["gap", "gap", "translate"] : box <= 3 ? ["translate", "gap", "translate"] : ["typesent", "translate"];
+    if (SR && box >= 2) pool.push("speak");
+  }
+  const type = rnd(pool);
+  return { type, item, noSRS: type === "speak" };
 }
 function startTopic(t) {
   const items = ITEMS.filter(i => i.topic === t.id);
@@ -340,23 +395,81 @@ function startSpeak() {
 }
 
 // ---------- Startseite ----------
+const LEVEL_NAMES = { A2: "A2 · Grundlagen", B1: "B1 · Alltag sicher", B2: "B2 · Fortgeschritten" };
+
+function openTopic(t) {
+  if (unlocked(t.lvl)) return startTopic(t);
+  const prev = LEVELS[LEVELS.indexOf(t.lvl) - 1];
+  const p = Math.round(levelStats(prev).pct * 100);
+  if (confirm(`Noch gesperrt: Für ${t.lvl} sollten ${Math.round(UNLOCK_AT * 100)} % von ${prev} gefestigt sein (aktuell ${p} %).\nTrotzdem starten?`)) startTopic(t);
+}
+
+function levelPick(done) {
+  const set = l => { S.startLevel = l; save(); done(); };
+  app.replaceChildren(h("main", { class: "home" },
+    h("h1", { class: "pad" }, "¡Hola!"),
+    h("p", { class: "sub" }, "Auf welchem Niveau möchtest du starten? Alle Stufen darunter sind dann sofort frei, die höheren schalten sich frei, sobald du die Stufe davor zu 80 % gefestigt hast."),
+    h("button", { class: "card", onclick: () => set("A2") }, h("span", { class: "ic" }, "🌱"), h("span", { class: "tx" }, h("b", {}, "A2"), h("span", { class: "sub2" }, "Grundlagen sicher machen"))),
+    h("button", { class: "card", onclick: () => set("B1") }, h("span", { class: "ic" }, "🌿"), h("span", { class: "tx" }, h("b", {}, "B1"), h("span", { class: "sub2" }, "Alltag und Gespräche"))),
+    h("button", { class: "card", onclick: () => set("B2") }, h("span", { class: "ic" }, "🌳"), h("span", { class: "tx" }, h("b", {}, "B2"), h("span", { class: "sub2" }, "Alles frei, auch anspruchsvolle Themen"))),
+    S.startLevel ? h("button", { class: "ghost", onclick: done }, "Abbrechen") : null));
+}
+
+function statsScreen() {
+  const bars = (label, pct, extra) => {
+    const fill = h("i"); fill.style.width = Math.round(pct * 100) + "%";
+    return h("div", { class: "srow" }, h("span", { class: "lab" }, label), h("span", { class: "bar" }, fill), h("span", { class: "pct" }, extra || Math.round(pct * 100) + " %"));
+  };
+  const types = Object.entries(S.stats).filter(([, s]) => s.n > 0).sort((a, b) => a[1].ok / a[1].n - b[1].ok / b[1].n);
+  const weak = ITEMS.filter(i => S.cards[i.id]?.miss).sort((a, b) => S.cards[b.id].miss - S.cards[a.id].miss).slice(0, 8);
+  const topics = TOPICS.map(t => {
+    const its = ITEMS.filter(i => i.topic === t.id);
+    return { t, pct: its.filter(i => (S.cards[i.id]?.box || 0) >= 3).length / its.length };
+  });
+  app.replaceChildren(
+    h("header", { class: "top" }, h("button", { class: "x", "aria-label": "Zurück", onclick: home }, "←"), h("b", {}, "Statistik")),
+    h("main", { class: "home" },
+      h("h2", {}, "Niveau (gefestigt)"),
+      LEVELS.map(l => { const s = levelStats(l); return bars(l + (unlocked(l) ? "" : " 🔒"), s.pct, `${s.mastered}/${s.total}`); }),
+      h("h2", {}, "Trefferquote nach Übungsart"),
+      types.length ? types.map(([g, s]) => bars(g, s.ok / s.n, `${Math.round(s.ok / s.n * 100)} % (${s.n})`)) : h("p", { class: "sub" }, "Noch keine Daten – mach eine Lektion."),
+      types.length > 1 ? h("p", { class: "sub" }, `Am meisten Übung brauchst du bei: ${types[0][0]}.`) : null,
+      h("h2", {}, "Gefestigt nach Thema"),
+      topics.map(x => bars(x.t.icon + " " + x.t.title.split(" ")[0], x.pct)),
+      h("h2", {}, "Schwierigste Karten"),
+      weak.length ? weak.map(i => h("div", { class: "weak" }, h("b", {}, i.es), h("span", { class: "sub" }, i.de), h("span", { class: "pct" }, S.cards[i.id].miss + "× falsch"))) : h("p", { class: "sub" }, "Bisher keine Fehler."),
+      h("h2", {}, "Einstellungen"),
+      h("p", { class: "sub" }, "Startniveau: " + (S.startLevel || "–")),
+      h("button", { class: "card", onclick: () => levelPick(statsScreen) }, h("span", { class: "tx" }, h("b", {}, "Startniveau ändern"))),
+      h("button", { class: "ghost small", onclick: () => { if (confirm("Gesamten Fortschritt löschen?")) { S = DEFAULTS(); save(); home(); } } }, "Fortschritt zurücksetzen")));
+}
+
+function topicCard(t) {
+  const its = ITEMS.filter(i => i.topic === t.id);
+  const s = its.filter(i => S.cards[i.id]).length;
+  const fill = h("i"); fill.style.width = Math.round(s / its.length * 100) + "%";
+  return h("button", { class: "card" + (unlocked(t.lvl) ? "" : " locked"), onclick: () => openTopic(t) },
+    h("span", { class: "ic" }, unlocked(t.lvl) ? t.icon : "🔒"), h("span", { class: "tx" }, h("b", {}, t.title), h("span", { class: "mini" }, h("span", { class: "bar" }, fill), `${s}/${its.length}`)));
+}
+
 function home() {
+  if (!S.startLevel) return levelPick(home);
   const due = dueItems().length;
   const total = ITEMS.length, seen = Object.keys(S.cards).length, mastered = Object.values(S.cards).filter(c => c.box >= 3).length;
   const today = S.days[dayStr(Date.now())] || 0;
   app.replaceChildren(
-    h("header", { class: "head" }, h("h1", {}, "¡Vamos!"), h("div", { class: "chips2" }, h("span", {}, "🔥 " + currentStreak()), h("span", {}, "⭐ " + S.xp))),
+    h("header", { class: "head" }, h("h1", {}, "¡Vamos!"), h("div", { class: "chips2" }, h("span", {}, "🔥 " + currentStreak()), h("span", {}, "⭐ " + S.xp), h("button", { class: "stat", "aria-label": "Statistik", onclick: statsScreen }, "📊"))),
     h("main", { class: "home" },
       h("button", { class: "review" + (due ? "" : " off"), disabled: due ? null : "", onclick: startReview },
         h("b", {}, "Wiederholen"), h("span", {}, due ? `${due} Karten fällig` : "Aktuell nichts fällig")),
-      h("h2", {}, "Themen"),
-      TOPICS.map(t => {
-        const its = ITEMS.filter(i => i.topic === t.id);
-        const s = its.filter(i => S.cards[i.id]).length;
-        const fill = h("i"); fill.style.width = Math.round(s / its.length * 100) + "%";
-        return h("button", { class: "card", onclick: () => startTopic(t) },
-          h("span", { class: "ic" }, t.icon), h("span", { class: "tx" }, h("b", {}, t.title), h("span", { class: "mini" }, h("span", { class: "bar" }, fill), `${s}/${its.length}`)));
-      }),
+      h("div", { class: "levels" }, LEVELS.map(l => {
+        const s = levelStats(l), ok = unlocked(l);
+        return h("div", { class: ok ? "on" : "off" }, h("b", {}, l + (ok ? "" : " 🔒")), Math.round(s.pct * 100) + " % gefestigt");
+      })),
+      LEVELS.map(l => [
+        h("h2", {}, LEVEL_NAMES[l]),
+        TOPICS.filter(t => t.lvl === l).map(topicCard)
+      ]),
       h("h2", {}, "Dialoge"),
       DIALOGS.map(d => h("button", { class: "card", onclick: () => runDialog(d) },
         h("span", { class: "ic" }, d.icon), h("span", { class: "tx" }, h("b", {}, d.title), h("span", { class: "sub2" }, `${d.steps.length} Antworten` + (S.dlg[d.id] ? ` · ${S.dlg[d.id]}× geschafft` : ""))))),
@@ -365,8 +478,7 @@ function home() {
       h("button", { class: "card", onclick: SR ? startSpeak : () => alert("Spracherkennung wird in diesem Browser nicht unterstützt. Bitte Chrome verwenden.") },
         h("span", { class: "ic" }, "🎤"), h("span", { class: "tx" }, h("b", {}, "Aussprache üben"), h("span", { class: "sub2" }, SR ? "Sätze laut nachsprechen" : "Nur in Chrome verfügbar"))),
       h("div", { class: "statbox" },
-        h("div", {}, h("b", {}, String(today)), "Lektionen heute"), h("div", {}, h("b", {}, `${seen}/${total}`), "Karten gelernt"), h("div", {}, h("b", {}, String(mastered)), "gefestigt")),
-      h("button", { class: "ghost small", onclick: () => { if (confirm("Gesamten Fortschritt löschen?")) { S = DEFAULTS(); save(); home(); } } }, "Fortschritt zurücksetzen")));
+        h("div", {}, h("b", {}, String(today)), "Lektionen heute"), h("div", {}, h("b", {}, `${seen}/${total}`), "Karten gelernt"), h("div", {}, h("b", {}, String(mastered)), "gefestigt"))));
 }
 
 home();

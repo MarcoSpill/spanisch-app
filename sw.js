@@ -1,4 +1,4 @@
-const CACHE = "spanisch-v3";
+const CACHE = "spanisch-v4";
 const FILES = ["./", "index.html", "style.css", "data.js", "data2.js", "app.js", "manifest.json", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener("activate", e => {
